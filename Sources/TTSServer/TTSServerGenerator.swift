@@ -21,8 +21,11 @@ struct TTSServerGenerator {
                 arguments += ["-v", voice]
             }
             arguments += ["-o", outputURL.path]
-            arguments += [text]
             process.arguments = arguments
+
+            // Create a pipe for stdin to avoid encoding issues with command-line arguments
+            let stdinPipe = Pipe()
+            process.standardInput = stdinPipe
 
             process.terminationHandler = { proc in
                 if proc.terminationStatus == 0 {
@@ -34,6 +37,9 @@ struct TTSServerGenerator {
 
             do {
                 try process.run()
+                // Write text to stdin with proper UTF-8 encoding
+                try stdinPipe.fileHandleForWriting.write(contentsOf: text.data(using: .utf8)!)
+                try stdinPipe.fileHandleForWriting.close()
             } catch {
                 cont.resume(throwing: TTSServerError.processFailed(error))
             }
