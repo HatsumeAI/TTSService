@@ -17,7 +17,7 @@ struct TTSServerGenerator {
             process.executableURL = URL(fileURLWithPath: "/usr/bin/say")
 
             var arguments: [String] = []
-            if let voice = voice, voice != "default" {
+            if let voice = voice, voice.lowercased() != "alloy" {
                 arguments += ["-v", voice]
             }
             arguments += ["-o", outputURL.path]

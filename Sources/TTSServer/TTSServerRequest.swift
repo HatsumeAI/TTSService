@@ -15,12 +15,16 @@ struct TTSServerRequest: Decodable {
     /// Default: mp3
     let responseFormat: TTSServerAudioFormat?
 
+    /// Instructions (ignored)
+    let instructions: String?
+
     /// Coding keys for custom mapping
     enum CodingKeys: String, CodingKey {
         case input
         case model
         case voice
         case responseFormat = "response_format"
+        case instructions
     }
 
     /// Validates the request
