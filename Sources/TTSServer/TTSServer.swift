@@ -62,6 +62,93 @@ struct TTSServerApp {
             }
         }
 
+        // OpenAI Transcriptions API compatible endpoint
+        // POST /v1/audio/transcriptions
+        router.post("/v1/audio/transcriptions") { request, context -> Response in
+            do {
+                // Parse multipart form data
+                guard let contentType = request.headers[.contentType], !contentType.isEmpty else {
+                    return TTSServerError.invalidFile("Missing content type").asResponse
+                }
+
+                // Get the body as data - collect all bytes
+                var bodyBuffer = ByteBuffer()
+                for try await byteBuffer in request.body {
+                    bodyBuffer.writeImmutableBuffer(byteBuffer)
+                }
+                let bodyData = Data(buffer: bodyBuffer)
+
+                // Parse multipart form data manually
+                let boundary = contentType.components(separatedBy: "boundary=").last ?? ""
+                let parts = parseMultipartFormData(data: bodyData, boundary: boundary)
+
+                // Extract file and model from parts
+                guard let fileData = parts["file"]?.data,
+                      let filename = parts["file"]?.filename else {
+                    return TTSServerError.missingFile.asResponse
+                }
+
+                guard let modelData = parts["model"]?.data,
+                      let model = String(data: modelData, encoding: .utf8) else {
+                    return TTSServerError.missingModel.asResponse
+                }
+
+                // Get optional parameters (all ignored except response_format)
+                let responseFormat: String?
+                if let formatData = parts["response_format"]?.data,
+                   let formatStr = String(data: formatData, encoding: .utf8),
+                   !formatStr.isEmpty {
+                    responseFormat = formatStr
+                } else {
+                    responseFormat = nil
+                }
+
+                let finalFormat = responseFormat ?? "json"
+
+                let format: TTSServerTranslationFormat
+                if finalFormat == "text" {
+                    format = .text
+                } else {
+                    format = .json
+                }
+
+                // Create temporary file for the audio data
+                let tempURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension(filename.components(separatedBy: ".").last ?? "wav")
+
+                try fileData.write(to: tempURL)
+
+                // Perform speech recognition
+                let transcription = try await translator.recognizeFile(
+                    url: tempURL,
+                    locale: model
+                )
+
+                // Clean up temporary file
+                try? FileManager.default.removeItem(at: tempURL)
+
+                // Build response based on format
+                var response = Response(status: .ok)
+
+                if format == .json {
+                    let jsonResponse = TTSServerTranslationResponse(text: transcription)
+                    let jsonData = try JSONEncoder().encode(jsonResponse)
+                    response.headers[.contentType] = "application/json"
+                    response.body = .init(byteBuffer: .init(data: jsonData))
+                } else {
+                    response.headers[.contentType] = "text/plain"
+                    response.body = .init(byteBuffer: .init(string: transcription))
+                }
+
+                return response
+            } catch let error as TTSServerError {
+                return error.asResponse
+            } catch {
+                return TTSServerError.processFailed(error).asResponse
+            }
+        }
+
         // OpenAI Translations API compatible endpoint
         // POST /v1/audio/translations
         router.post("/v1/audio/translations") { request, context -> Response in
