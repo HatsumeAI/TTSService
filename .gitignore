@@ -64,3 +64,6 @@ fastlane/test_output
 # System files
 
 .DS_Store
+
+# Python
+venv
