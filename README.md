@@ -1,14 +1,15 @@
-# SayTTS
+OpenAI Speech API compatible Text-to-Speech for macOS, served from the menu bar.
 
-OpenAI Speech API compatible Text-to-Speech server for macOS using the built-in `say` command.
+SayTTS runs an HTTP server built on the system `say` command and exposes the
+OpenAI-compatible `/v1/audio/*` endpoints. It lives in the menu bar: left click
+opens settings, right click shows the status and a quit action.
 
 ## Requirements
 
-- macOS 14.0+
-- Xcode Command Line Tools (for `swift` and `afconvert`)
-- ffmpeg (for MP3 and Opus format support)
+- macOS 15.0+ (the embedded Hummingbird server requires it)
+- Xcode Command Line Tools (for `say` and `afconvert`)
+- ffmpeg, for MP3 and Opus output
 
-Install ffmpeg via Homebrew:
 ```bash
 brew install ffmpeg
 ```
@@ -16,90 +17,26 @@ brew install ffmpeg
 ## Building
 
 ```bash
-swift build
+make build
 ```
 
-## Installing as a service
-
-To install TTSServer as a launchd service that starts automatically:
-
-```bash
-make service
-```
-
-This will:
-1. Build the release binary
-2. Install it to `~/.bin/TTSServer`
-3. Create a launchd plist at `~/Library/LaunchAgents/HatsumeAI.TTSServer.plist`
-
-### Service configuration
-
-The service can be configured with variables when installing:
-
-```bash
-# Custom port
-make service HTTP_PORT=3000
-
-# Custom host and port
-make service HTTP_HOST=0.0.0.0 HTTP_PORT=9000
-
-# Custom ffmpeg path
-make service FFMPEG_PATH=/usr/local/bin/ffmpeg
-
-# All variables
-make service HTTP_HOST=0.0.0.0 HTTP_PORT=3000 FFMPEG_PATH=/usr/local/bin/ffmpeg
-```
-
-Manage the service with:
-
-```bash
-# Start the service
-make start
-
-# Stop the service
-make stop
-
-# Restart the service
-make restart
-
-# Or manually with launchctl
-launchctl load ~/Library/LaunchAgents/HatsumeAI.TTSServer.plist
-launchctl unload ~/Library/LaunchAgents/HatsumeAI.TTSServer.plist
-
-# Check service status
-launchctl list | grep TTSServer
-```
+or from Xcode, with the `SayTTS` scheme.
 
 ## Running
 
-```bash
-swift run
-```
+Start the server from the settings panel, or tick **Start serving when SayTTS
+opens** to have it come up with the app. It listens on `http://127.0.0.1:9000` by
+default; turn on **Serve on local network** to bind `0.0.0.0` instead.
 
-The server defaults to `http://127.0.0.1:9000`
+Settings are locked while the server is starting, running or stopping, because
+the listener holds the port until it stops.
 
-### Configuration
+### Authentication
 
-The server can be configured via environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HTTP_HOST` | `127.0.0.1` | Host address to bind to. Use `0.0.0.0` to accept connections from the local network |
-| `HTTP_PORT` | `9000` | Port number to listen on |
-| `HTTP_TOKEN` | *(empty)* | Bearer token required on every request. Empty means no authentication |
-| `FFMPEG_PATH` | *(auto-detected)* | Path to ffmpeg executable. Required for MP3 and Opus |
-
-Example:
+With **Require authentication** enabled, every request must carry a matching
+bearer token or it is answered with `401 Unauthorized`:
 
 ```bash
-HTTP_HOST=0.0.0.0 HTTP_PORT=3000 FFMPEG_PATH=/usr/local/bin/ffmpeg swift run
-```
-
-With a token, every request must carry `Authorization: Bearer <token>`:
-
-```bash
-HTTP_TOKEN=s3cret swift run
-
 curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Authorization: Bearer s3cret" \
   -H "Content-Type: application/json" \
@@ -107,31 +44,7 @@ curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   --output speech.aiff
 ```
 
-## Using the library
-
-The package ships two products:
-
-| Product | Kind | Use |
-|---------|------|-----|
-| `TTSServerKit` | library | Embed the server in another app and drive it from the UI |
-| `TTSServer` | executable | Run it standalone, e.g. under launchd |
-
-`TTSServerService` starts and stops an HTTP listener on demand:
-
-```swift
-import TTSServerKit
-
-let service = TTSServerService(
-    configuration: .init(host: "127.0.0.1", port: 9000, token: nil)
-)
-
-try await service.start()   // returns once the socket is bound, throws if the port is taken
-await service.stop()        // drains in-flight requests, then closes the listener
-```
-
-`start()` resolves only after the address is actually bound, and throws a
-`TTSServerError.startupFailed` with a readable reason (such as "port already in
-use") if it cannot be. `state` reports the current lifecycle status.
+Tokens are compared in constant time.
 
 ## Using Siri voices
 
@@ -209,7 +122,7 @@ than an English translation.
 ### Generate AIFF audio (default voice)
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/audio/speech \
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "input": "Hello, world!",
@@ -223,7 +136,7 @@ curl -X POST http://127.0.0.1:8080/v1/audio/speech \
 
 ```bash
 # List available voices: say -v '?'
-curl -X POST http://127.0.0.1:8080/v1/audio/speech \
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "input": "The quick brown fox jumps over the lazy dog.",
@@ -237,7 +150,7 @@ curl -X POST http://127.0.0.1:8080/v1/audio/speech \
 ### Generate WAV format (24kHz uncompressed)
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/audio/speech \
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "input": "This is uncompressed audio.",
@@ -250,7 +163,7 @@ curl -X POST http://127.0.0.1:8080/v1/audio/speech \
 ### Generate raw PCM (24kHz, 16-bit signed little-endian)
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/audio/speech \
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "input": "Raw PCM data without headers.",
@@ -263,7 +176,7 @@ curl -X POST http://127.0.0.1:8080/v1/audio/speech \
 ### Generate FLAC (lossless)
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/audio/speech \
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "input": "Lossless compressed audio.",
@@ -276,7 +189,7 @@ curl -X POST http://127.0.0.1:8080/v1/audio/speech \
 ### Generate MP3 (requires ffmpeg)
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/audio/speech \
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "input": "MP3 compressed audio.",
@@ -289,7 +202,7 @@ curl -X POST http://127.0.0.1:8080/v1/audio/speech \
 ### Generate Opus (requires ffmpeg)
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/audio/speech \
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "input": "Opus compressed audio.",
@@ -301,11 +214,29 @@ curl -X POST http://127.0.0.1:8080/v1/audio/speech \
 
 ## Testing
 
-Run the test suite:
+Run the test suite (28 tests across 4 suites):
 
 ```bash
-swift test
+make test
 ```
+
+or `⌘U` in Xcode.
+
+The tests cover server configuration, bearer-token middleware, multipart
+parsing, error descriptions, audio formats, and request validation. They drive
+the middleware directly rather than through `HummingbirdTesting`, which pulls in
+`swift-nio-transport-services` — that package fails to link when Xcode builds it
+as a dynamic product.
+
+## Layout
+
+| Path | Contents |
+|------|----------|
+| `SayTTS/AppDelegate.swift` | Status item, left/right click split, settings panel |
+| `SayTTS/AppModel.swift` | Persisted settings, server lifecycle, validation |
+| `SayTTS/SettingsView.swift` | The settings panel UI |
+| `SayTTS/TTSServerKit/` | The embedded HTTP server (Hummingbird) |
+| `SayTTSTests/` | Test suite |
 
 ## Error Responses
 

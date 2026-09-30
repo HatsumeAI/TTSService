@@ -1,85 +1,27 @@
-# Default configuration values (can be overridden via make arguments or environment)
-HTTP_PORT ?= 9000
-HTTP_HOST ?= 127.0.0.1
-FFMPEG_PATH ?= /opt/homebrew/bin/ffmpeg
-# Leave empty to serve without authentication
-HTTP_TOKEN ?=
+# SayTTS build wrapper around xcodebuild.
+
+CONFIGURATION ?= Debug
+PROJECT = SayTTS.xcodeproj
+SCHEME = SayTTS
+DERIVED = $(HOME)/Library/Developer/Xcode/DerivedData/SayTTS-acwezdtwubufazcortbxflwjeexx/Build/Products/$(CONFIGURATION)
+
+.PHONY: build release test clean run
 
 build:
-	swift build
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+		-configuration Debug -destination 'platform=macOS' build
 
 release:
-	swift build -c release
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+		-configuration Release -destination 'platform=macOS' build
 
 test:
-	swift test --parallel
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) \
+		-configuration Debug -destination 'platform=macOS' test
+
+# Launch the app with the settings panel open, for manual checks.
+run: build
+	open -a "$(DERIVED)/SayTTS.app" --args --open-settings
 
 clean:
-	rm -rf .build
-
-install: release
-	@mkdir -p $(HOME)/.bin
-	install ./.build/release/TTSServer $(HOME)/.bin/TTSServer
-
-service: install
-	@echo "Creating launchd service..."
-	@mkdir -p $(HOME)/Library/LaunchAgents
-	@printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
-	'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-	'<plist version="1.0">' \
-	'<dict>' \
-	'    <key>Label</key>' \
-	'    <string>HatsumeAI.TTSServer</string>' \
-	'    <key>ProgramArguments</key>' \
-	'    <array>' \
-	'        <string>$(HOME)/.bin/TTSServer</string>' \
-	'    </array>' \
-	'    <key>EnvironmentVariables</key>' \
-	'    <dict>' \
-	'        <key>HTTP_PORT</key>' \
-	'        <string>$(HTTP_PORT)</string>' \
-	'        <key>HTTP_HOST</key>' \
-	'        <string>$(HTTP_HOST)</string>' \
-	'        <key>FFMPEG_PATH</key>' \
-	'        <string>$(FFMPEG_PATH)</string>' \
-	'        <key>HTTP_TOKEN</key>' \
-	'        <string>$(HTTP_TOKEN)</string>' \
-	'    </dict>' \
-	'    <key>RunAtLoad</key>' \
-	'    <true/>' \
-	'    <key>KeepAlive</key>' \
-	'    <true/>' \
-	'</dict>' \
-	'</plist>' \
-	> $(HOME)/Library/LaunchAgents/HatsumeAI.TTSServer.plist
-	@echo "Service installed to: $(HOME)/Library/LaunchAgents/HatsumeAI.TTSServer.plist"
-	@echo ""
-	@echo "Configuration:"
-	@echo "  HTTP_PORT=$(HTTP_PORT)"
-	@echo "  HTTP_HOST=$(HTTP_HOST)"
-	@echo "  FFMPEG_PATH=$(FFMPEG_PATH)"
-	@echo "  HTTP_TOKEN=$(if $(HTTP_TOKEN),set,(empty - no authentication))"
-	@echo ""
-	@echo "To enable and start the service:"
-	@echo "  launchctl load $(HOME)/Library/LaunchAgents/HatsumeAI.TTSServer.plist"
-	@echo ""
-	@echo "To disable and stop the service:"
-	@echo "  launchctl unload $(HOME)/Library/LaunchAgents/HatsumeAI.TTSServer.plist"
-	@echo ""
-	@echo "To check service status:"
-	@echo "  launchctl list | grep TTSServer"
-	@echo ""
-
-start: service
-	launchctl load $(HOME)/Library/LaunchAgents/HatsumeAI.TTSServer.plist
-	@echo "Service started..."
-	@echo ""
-
-stop: service
-	launchctl unload $(HOME)/Library/LaunchAgents/HatsumeAI.TTSServer.plist
-	@echo "Service stopped..."
-	@echo ""
-
-restart: stop start
-
-
+	rm -rf "$(HOME)/Library/Developer/Xcode/DerivedData/SayTTS-"*

@@ -1,10 +1,11 @@
 import Foundation
 import HTTPTypes
 import Hummingbird
-import HummingbirdTesting
+import Logging
+import NIOEmbedded
 import Testing
 
-@testable import TTSServerKit
+@testable import SayTTS
 
 @Suite("TTSServerKit Configuration")
 struct TTSServerConfigurationTests {
@@ -78,28 +79,36 @@ struct TTSServerConfigurationTests {
 @Suite("TTSServerKit Bearer Token Middleware")
 struct BearerTokenMiddlewareTests {
 
-    /// Sends a GET to a route guarded by the middleware and returns the response.
+    /// Runs the middleware over a synthetic request and returns its response.
+    ///
+    /// `HummingbirdTesting` is deliberately not used here: it drags in
+    /// swift-nio-transport-services, which fails to link as a dynamic package
+    /// product. Driving `handle` directly covers the same branches.
     private func response(
         token: String?,
         authorization: String?
-    ) async throws -> TestResponse {
-        let router = Router()
-        router.middlewares.add(BearerTokenMiddleware(token: token))
-        router.get("/ping") { _, _ in Response(status: .ok) }
-
-        var headers: HTTPFields = [:]
+    ) async throws -> Response {
+        var headerFields: HTTPFields = [:]
         if let authorization {
-            headers[.authorization] = authorization
+            headerFields[.authorization] = authorization
         }
-        let requestHeaders = headers
 
-        return try await Application(router: router).test(.router) { client in
-            try await client.executeRequest(
-                uri: "/ping",
+        let request = Request(
+            head: .init(
                 method: .get,
-                headers: requestHeaders,
-                body: nil
-            )
+                scheme: "http",
+                authority: "127.0.0.1:9000",
+                path: "/ping",
+                headerFields: headerFields
+            ),
+            body: .init(buffer: ByteBuffer())
+        )
+        let context = BasicRequestContext(
+            source: ApplicationRequestContextSource(channel: EmbeddedChannel(), logger: Logger(label: "test"))
+        )
+
+        return try await BearerTokenMiddleware(token: token).handle(request, context: context) { _, _ in
+            Response(status: .ok)
         }
     }
 
@@ -141,10 +150,10 @@ struct BearerTokenMiddlewareTests {
 
     @Test("A rejection advertises the bearer scheme")
     func testRejectionCarriesChallenge() async throws {
-        let testResponse = try await response(token: "abc", authorization: nil)
+        let response = try await response(token: "abc", authorization: nil)
 
-        #expect(testResponse.status == .unauthorized)
-        #expect(testResponse.headers[.wwwAuthenticate] == "Bearer")
+        #expect(response.status == .unauthorized)
+        #expect(response.headers[.wwwAuthenticate] == "Bearer")
     }
 
     @Test("Only the exact token matches")

@@ -1,5 +1,5 @@
 import Testing
-@testable import TTSServerKit
+@testable import SayTTS
 import Foundation
 
 @Suite("TTSServer Tests")
