@@ -1,7 +1,9 @@
 # Default configuration values (can be overridden via make arguments or environment)
-HTTP_PORT ?= 8080
+HTTP_PORT ?= 9000
 HTTP_HOST ?= 127.0.0.1
 FFMPEG_PATH ?= /opt/homebrew/bin/ffmpeg
+# Leave empty to serve without authentication
+HTTP_TOKEN ?=
 
 build:
 	swift build
@@ -40,6 +42,8 @@ service: install
 	'        <string>$(HTTP_HOST)</string>' \
 	'        <key>FFMPEG_PATH</key>' \
 	'        <string>$(FFMPEG_PATH)</string>' \
+	'        <key>HTTP_TOKEN</key>' \
+	'        <string>$(HTTP_TOKEN)</string>' \
 	'    </dict>' \
 	'    <key>RunAtLoad</key>' \
 	'    <true/>' \
@@ -54,6 +58,7 @@ service: install
 	@echo "  HTTP_PORT=$(HTTP_PORT)"
 	@echo "  HTTP_HOST=$(HTTP_HOST)"
 	@echo "  FFMPEG_PATH=$(FFMPEG_PATH)"
+	@echo "  HTTP_TOKEN=$(if $(HTTP_TOKEN),set,(empty - no authentication))"
 	@echo ""
 	@echo "To enable and start the service:"
 	@echo "  launchctl load $(HOME)/Library/LaunchAgents/HatsumeAI.TTSServer.plist"

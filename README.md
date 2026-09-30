@@ -76,7 +76,7 @@ launchctl list | grep TTSServer
 swift run
 ```
 
-The server defaults to `http://127.0.0.1:8080`
+The server defaults to `http://127.0.0.1:9000`
 
 ### Configuration
 
@@ -84,15 +84,54 @@ The server can be configured via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HTTP_HOST` | `127.0.0.1` | Host address to bind to |
-| `HTTP_PORT` | `8080` | Port number to listen on |
-| `FFMPEG_PATH` | `/opt/homebrew/bin/ffmpeg` | Path to ffmpeg executable |
+| `HTTP_HOST` | `127.0.0.1` | Host address to bind to. Use `0.0.0.0` to accept connections from the local network |
+| `HTTP_PORT` | `9000` | Port number to listen on |
+| `HTTP_TOKEN` | *(empty)* | Bearer token required on every request. Empty means no authentication |
+| `FFMPEG_PATH` | *(auto-detected)* | Path to ffmpeg executable. Required for MP3 and Opus |
 
 Example:
 
 ```bash
 HTTP_HOST=0.0.0.0 HTTP_PORT=3000 FFMPEG_PATH=/usr/local/bin/ffmpeg swift run
 ```
+
+With a token, every request must carry `Authorization: Bearer <token>`:
+
+```bash
+HTTP_TOKEN=s3cret swift run
+
+curl -X POST http://127.0.0.1:9000/v1/audio/speech \
+  -H "Authorization: Bearer s3cret" \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Hello, world!", "model": "tts-1", "response_format": "aiff"}' \
+  --output speech.aiff
+```
+
+## Using the library
+
+The package ships two products:
+
+| Product | Kind | Use |
+|---------|------|-----|
+| `TTSServerKit` | library | Embed the server in another app and drive it from the UI |
+| `TTSServer` | executable | Run it standalone, e.g. under launchd |
+
+`TTSServerService` starts and stops an HTTP listener on demand:
+
+```swift
+import TTSServerKit
+
+let service = TTSServerService(
+    configuration: .init(host: "127.0.0.1", port: 9000, token: nil)
+)
+
+try await service.start()   // returns once the socket is bound, throws if the port is taken
+await service.stop()        // drains in-flight requests, then closes the listener
+```
+
+`start()` resolves only after the address is actually bound, and throws a
+`TTSServerError.startupFailed` with a readable reason (such as "port already in
+use") if it cannot be. `state` reports the current lifecycle status.
 
 ## Using Siri voices
 
@@ -101,7 +140,11 @@ You need to go to System Settings - Assessibility - Spoken content, then select 
 
 Siri voices cannot be referred directly as voice argument but it works as default one.
 
-## API Endpoint
+## API Endpoints
+
+All endpoints are OpenAI Speech API compatible. When `HTTP_TOKEN` is set, every
+request must include `Authorization: Bearer <token>` or it is answered with
+`401 Unauthorized`.
 
 ### POST /v1/audio/speech
 
@@ -115,8 +158,37 @@ Generate audio from text.
 | `model` | string | Yes | Must be `"tts-1"` (validated, no effect on output) |
 | `voice` | string | No | Voice name (e.g., "Alex", "Samantha"). Defaults to system voice. |
 | `response_format` | string | No | Audio format. Default: `"mp3"` |
+| `instructions` | string | No | Accepted for compatibility, ignored |
 
 **Response:** Audio file with appropriate `Content-Type` header.
+
+### POST /v1/audio/transcriptions
+
+Transcribe an audio file using on-device Apple Speech recognition.
+
+**Request Body:** `multipart/form-data`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | file | Yes | The audio file to transcribe |
+| `model` | string | Yes | Locale identifier for the recognizer, e.g. `"ru-RU"`, `"en-US"` |
+| `response_format` | string | No | `"json"` (default) or `"text"` |
+| `prompt` | string | No | Accepted for compatibility, ignored |
+| `temperature` | number | No | Accepted for compatibility, ignored |
+
+**Response:** `{"text": "..."}` by default, or plain text with `response_format=text`.
+
+```bash
+curl -X POST http://127.0.0.1:9000/v1/audio/transcriptions \
+  -F "file=@Media/russian.wav" \
+  -F "model=ru-RU"
+```
+
+### POST /v1/audio/translations
+
+Same behaviour as `/v1/audio/transcriptions`. Apple Speech transcribes in the
+locale's own script, so this endpoint currently returns the transcription rather
+than an English translation.
 
 ## Supported Formats
 

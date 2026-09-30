@@ -2,22 +2,35 @@
 import PackageDescription
 
 let package = Package(
-    name: "TTSServer",
+    name: "TTSService",
     platforms: [.macOS(.v15)],
+    products: [
+        // Reusable server core, embedded by the SayTTS menu bar app.
+        .library(name: "TTSServerKit", targets: ["TTSServerKit"]),
+        // Standalone CLI / launchd service.
+        .executable(name: "TTSServer", targets: ["TTSServer"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
-        .package(url: "https://github.com/apple/swift-configuration", from: "1.0.0"),
     ],
     targets: [
+        .target(
+            name: "TTSServerKit",
+            dependencies: [.product(name: "Hummingbird", package: "hummingbird")],
+            path: "Sources/TTSServerKit"
+        ),
         .executableTarget(
             name: "TTSServer",
-            dependencies: [.product(name: "Hummingbird", package: "hummingbird")],
+            dependencies: ["TTSServerKit"],
             path: "Sources/TTSServer"
         ),
         .testTarget(
-            name: "TTSServerTests",
-            dependencies: ["TTSServer"],
-            path: "Tests/TTSServerTests"
-        )
+            name: "TTSServerKitTests",
+            dependencies: [
+                "TTSServerKit",
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
+            ],
+            path: "Tests/TTSServerKitTests"
+        ),
     ]
 )

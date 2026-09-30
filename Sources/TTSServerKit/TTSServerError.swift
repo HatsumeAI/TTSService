@@ -1,22 +1,26 @@
 import Foundation
 import Hummingbird
 
-enum TTSServerError: LocalizedError {
+/// Errors surfaced by the TTS server and mapped to HTTP responses.
+public enum TTSServerError: LocalizedError, Sendable {
     case invalidModel(String)
     case invalidVoice(String)
     case invalidInput(String)
     case formatNotSupported(String)
     case conversionFailed(String)
     case sayCommandFailed(Int32)
-    case processFailed(Error)
+    case processFailed(any Error)
     case fileReadFailed(String)
     case fileWriteFailed(String)
     case recognitionFailed(String)
     case invalidFile(String)
     case missingFile
     case missingModel
+    case unauthorized
+    case startupFailed(String)
+    case serverExitedUnexpectedly
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidModel(let model):
             return "Invalid model: \(model). Supported model is 'tts-1'."
@@ -44,11 +48,17 @@ enum TTSServerError: LocalizedError {
             return "Missing required file parameter."
         case .missingModel:
             return "Missing required model parameter."
+        case .unauthorized:
+            return "Unauthorized: invalid or missing API token."
+        case .startupFailed(let reason):
+            return "Could not start the server: \(reason)"
+        case .serverExitedUnexpectedly:
+            return "The server stopped unexpectedly. The port may already be in use."
         }
     }
 
     /// Converts this error to an HTTP response
-    var asResponse: Response {
+    public var asResponse: Response {
         let errorMessage = self.errorDescription ?? "Unknown error"
 
         // Determine status code based on error type
@@ -56,6 +66,10 @@ enum TTSServerError: LocalizedError {
         switch self {
         case .invalidModel, .invalidVoice, .invalidInput, .formatNotSupported, .missingFile, .missingModel, .invalidFile:
             status = .badRequest  // 400 - client error
+        case .unauthorized:
+            status = .unauthorized  // 401
+        case .startupFailed, .serverExitedUnexpectedly:
+            status = .serviceUnavailable  // 503
         case .conversionFailed, .sayCommandFailed, .processFailed, .fileReadFailed, .fileWriteFailed, .recognitionFailed:
             status = .internalServerError  // 500 - server error
         }

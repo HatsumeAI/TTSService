@@ -1,5 +1,5 @@
 import Testing
-@testable import TTSServer
+@testable import TTSServerKit
 import Foundation
 
 @Suite("TTSServer Tests")
@@ -53,7 +53,8 @@ struct TTSServerTests {
             input: "",
             model: "tts-1",
             voice: nil,
-            responseFormat: nil
+            responseFormat: nil,
+            instructions: nil
         )
 
         #expect(throws: TTSServerError.self) {
@@ -67,7 +68,8 @@ struct TTSServerTests {
             input: "Hello world",
             model: "tts-2",
             voice: nil,
-            responseFormat: nil
+            responseFormat: nil,
+            instructions: nil
         )
 
         var errorThrown = false
@@ -86,7 +88,8 @@ struct TTSServerTests {
             input: longInput,
             model: "tts-1",
             voice: nil,
-            responseFormat: nil
+            responseFormat: nil,
+            instructions: nil
         )
 
         var errorThrown = false
@@ -104,7 +107,8 @@ struct TTSServerTests {
             input: "Hello world",
             model: "tts-1",
             voice: "Alex",
-            responseFormat: .aiff
+            responseFormat: .aiff,
+            instructions: nil
         )
 
         // Should not throw

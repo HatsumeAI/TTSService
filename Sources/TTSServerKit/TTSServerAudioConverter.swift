@@ -1,14 +1,21 @@
 import Foundation
 
-/// Handles audio format conversion using afconvert tool
-struct TTSServerAudioConverter {
+/// Handles audio format conversion using `afconvert` and `ffmpeg`
+public struct TTSServerAudioConverter: Sendable {
+
+    /// Path to the ffmpeg executable used for mp3/opus output.
+    private let ffmpegPath: String
+
+    public init(ffmpegPath: String = TTSServerConfiguration.resolveFFmpegPath()) {
+        self.ffmpegPath = ffmpegPath
+    }
 
     /// Converts an AIFF file to the target format
     /// - Parameters:
     ///   - inputURL: The source AIFF file URL
     ///   - format: The target format
     /// - Returns: URL to the converted file
-    func convert(inputURL: URL, to format: TTSServerAudioFormat) async throws -> URL {
+    public func convert(inputURL: URL, to format: TTSServerAudioFormat) async throws -> URL {
         // Check if format is supported
         guard format.isSupported else {
             throw TTSServerError.formatNotSupported(format.rawValue)
@@ -93,10 +100,10 @@ struct TTSServerAudioConverter {
     ///   - outputURL: The destination file URL
     ///   - format: The target format (mp3 or opus)
     /// - Returns: URL to the converted file
-    func runFFmpegConvert(inputURL: URL, outputURL: URL, format: TTSServerAudioFormat) async throws -> URL {
+    private func runFFmpegConvert(inputURL: URL, outputURL: URL, format: TTSServerAudioFormat) async throws -> URL {
         try await withCheckedThrowingContinuation { cont in
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: TTSServerConfiguration.shared.ffmpegPath)
+            process.executableURL = URL(fileURLWithPath: self.ffmpegPath)
 
             var arguments = ["-y"]  // Overwrite output file if exists
             arguments += ["-i", inputURL.path]  // Input file

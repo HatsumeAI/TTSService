@@ -1,14 +1,16 @@
 import Foundation
 
-/// Generates speech using macOS say command
-struct TTSServerGenerator {
+/// Generates speech using the macOS `say` command
+public struct TTSServerGenerator: Sendable {
+
+    public init() {}
 
     /// Generates audio from text using the say command
     /// - Parameters:
     ///   - text: The text to synthesize
     ///   - voice: Optional voice name (default system voice if nil)
     /// - Returns: URL to the generated AIFF file
-    func generate(text: String, voice: String? = nil) async throws -> URL {
+    public func generate(text: String, voice: String? = nil) async throws -> URL {
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + ".aiff")
 

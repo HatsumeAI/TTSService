@@ -1,7 +1,7 @@
 import Foundation
 
 /// Supported audio formats for TTS output
-enum TTSServerAudioFormat: String, Decodable {
+public enum TTSServerAudioFormat: String, Decodable, Sendable, CaseIterable {
     case mp3
     case opus
     case aac
@@ -11,7 +11,7 @@ enum TTSServerAudioFormat: String, Decodable {
     case aiff
 
     /// MIME content type for the format
-    var contentType: String {
+    public var contentType: String {
         switch self {
         case .mp3:
             return "audio/mpeg"
@@ -31,7 +31,7 @@ enum TTSServerAudioFormat: String, Decodable {
     }
 
     /// File extension for the format
-    var fileExtension: String {
+    public var fileExtension: String {
         switch self {
         case .mp3:
             return "mp3"
@@ -52,7 +52,7 @@ enum TTSServerAudioFormat: String, Decodable {
 
     /// Whether this format is supported on macOS
     /// MP3 and Opus require ffmpeg to be installed
-    var isSupported: Bool {
+    public var isSupported: Bool {
         switch self {
         case .mp3, .opus, .aac, .flac, .wav, .pcm, .aiff:
             return true
